@@ -1,0 +1,86 @@
+---
+title: "p8105_hw6_nec2159"
+author: "Nicole Criscuolo"
+date: "2025-11-18"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(p8105.datasets)
+library(tidyverse)
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 2
+
+```{r}
+data("weather_df")
+
+estimates =
+weather_df |> 
+  modelr::bootstrap(n = 500) |> 
+  mutate(
+    models = map(strap, \(df) lm(tmax ~ tmin + prcp, data = df)),
+    tidy_results = map(models, broom::tidy),
+    glance_results = map(models, broom::glance),
+    beta_ratio = map_dbl(tidy_results, \(x) x[["estimate"]][2] / x[["estimate"]][3]),
+    r_squared = map_dbl(glance_results, "r.squared")
+    ) |> 
+  select(.id, beta_ratio, r_squared)
+```
+
+```{r}
+estimates |> 
+  ggplot(aes(x = beta_ratio)) +
+  geom_histogram(fill = "lavender", color = "purple") +
+  labs(
+    title = "Bootstrap Distribution of Beta Ratio"
+  )
+```
+
+
+
+```{r}
+estimates |> 
+  ggplot(aes(x = r_squared)) +
+  geom_histogram(fill = "lavender", color = "purple") +
+  labs(
+    title = "Bootstrap Distribution of R Squared"
+  )
+```
+
+The distribution of $\frac{\hat{\beta}_1}{\hat{\beta}_2}$ appears to be left-skewed.
+
+```{r}
+beta_ratio_CI =
+estimates |> 
+  pull(beta_ratio) |> 
+  quantile(c(.025, .975))
+```
+
+The distribution of $R^2$ appears to be normally distributed.
+
+```{r}
+estimates |> 
+  pull(r_squared) |> 
+  quantile(c(.025, .975))
+```
+
+
+
+
+
