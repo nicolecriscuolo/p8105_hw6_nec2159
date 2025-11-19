@@ -4,10 +4,12 @@ author: "Nicole Criscuolo"
 date: "2025-11-18"
 output: github_document
 ---
+## CHANGE # BOOTSTRAPS PROBLEM 2
 
 ```{r setup, include=FALSE}
 library(p8105.datasets)
 library(tidyverse)
+library(modelr)
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.asp = .6,
@@ -52,7 +54,7 @@ estimates |>
   )
 ```
 
-
+The distribution of $\frac{\hat{\beta}_1}{\hat{\beta}_2}$ appears to be left-skewed. This means there is a larger cluster of ratios on the higher end, indicating that in many bootstrap samples, ${\hat{\beta}_1}$ tends to be relatively large or ${\hat{\beta}_2}$ tends to be relatively small compared to their typical values. Intuitively, it is probably more likely that ${\hat{\beta}_2}$ is more variable than ${\hat{\beta}_1}$ since minimum and maximum temperature are most likely more correlated than precipitation and maximum temperature.
 
 ```{r}
 estimates |> 
@@ -63,7 +65,7 @@ estimates |>
   )
 ```
 
-The distribution of $\frac{\hat{\beta}_1}{\hat{\beta}_2}$ appears to be left-skewed.
+The distribution of $R^2$ appears to be normally distributed and centered around 0.941. Most estimates are very close to this value, indicating the proportion of variance explained by the model is high across bootstrap samples.
 
 ```{r}
 beta_ratio_CI =
@@ -71,8 +73,6 @@ estimates |>
   pull(beta_ratio) |> 
   quantile(c(.025, .975))
 ```
-
-The distribution of $R^2$ appears to be normally distributed.
 
 ```{r}
 estimates |> 
