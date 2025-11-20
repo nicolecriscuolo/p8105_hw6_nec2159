@@ -27,6 +27,65 @@ scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 ```
 
+## Problem 1
+
+```{r}
+homicide_df =
+  read_csv("data/homicide-data.csv") |> 
+  mutate(
+    state = toupper(state),
+    city_state = paste(city, state, sep = ", "),
+    solved = factor(if_else(disposition %in% c("Closed without arrest", "Open/No arrest"), "No", "Yes")),
+    victim_age = as.numeric(victim_age)) |> 
+  filter(!city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL"),
+         victim_race %in% c("White", "Black"))
+
+baltimore_df =
+  homicide_df |> 
+  filter(city_state == "Baltimore, MD")
+```
+
+```{r}
+baltimore_model =
+  glm(solved ~ victim_age + victim_sex + victim_race, data = baltimore_df, family = binomial)
+
+baltimore_model |> 
+  broom::tidy(conf.int = TRUE, exponentiate = TRUE) |> 
+  filter(term == "victim_sexMale") |> 
+  select(estimate, conf.low, conf.high)
+```
+
+In homicide cases in Baltimore, MD, male victims had 0.4255117 times the odds of having their cases solved compared to female victims after adjusting for age and race. We are 95% confident that the true odds ratio for male versus female victims is between 0.3241908 and 0.5575508.
+
+```{r}
+all_city_results =
+homicide_df |> 
+  nest(data = -city_state) |> 
+  mutate(
+    fits = map(data, \(df) glm(solved ~ victim_age + victim_sex + victim_race, data = df, family = binomial)),
+    results = map(fits, \(x) broom::tidy(x, conf.int = TRUE, exponentiate = TRUE))
+  ) |> 
+  unnest(results) |> 
+  select(city_state, term, estimate, conf.low, conf.high) |> 
+  filter(term == "victim_sexMale")
+```
+
+```{r}
+all_city_results |> 
+  mutate(city_state = reorder(city_state, estimate)) |> 
+  ggplot(aes(x = city_state, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(
+    x = "City",
+    y = "Estimated Odds Ratio",
+    title = "Estimated Odds Ratio for Each City"
+  )
+```
+
+After comparing all the cities, NYC is where male homicide victims had the lowest odds of having their cases solved relative to female victims after adjusting for age and race. Albuquerque is the city where male homicide victims had the highest odds of having their cases solved relative to female victims after adjusting for age and race.
+
 ## Problem 2
 
 ```{r}
@@ -80,6 +139,18 @@ estimates |>
   quantile(c(.025, .975))
 ```
 
+## Problem 3
+
+```{r}
+birth_df =
+  read_csv("data/birthweight.csv") |> 
+  mutate(babysex = case_match(
+    babysex,
+    1 ~ "male",
+    2 ~ "female"
+  ))
+  
+```
 
 
 
