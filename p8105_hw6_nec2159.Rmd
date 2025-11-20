@@ -10,6 +10,7 @@ output: github_document
 library(p8105.datasets)
 library(tidyverse)
 library(modelr)
+library(glmnet)
 knitr::opts_chunk$set(
   fig.width = 6,
   fig.asp = .6,
@@ -25,6 +26,8 @@ options(
 
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
 ```
 
 ## Problem 1
@@ -142,16 +145,112 @@ estimates |>
 ## Problem 3
 
 ```{r}
-birth_df =
+bwt_df =
   read_csv("data/birthweight.csv") |> 
+  janitor::clean_names() |> 
   mutate(babysex = case_match(
     babysex,
     1 ~ "male",
-    2 ~ "female"
-  ))
-  
+    2 ~ "female"),
+    babysex = fct_infreq(babysex),
+    frace = 
+        case_match(frace,
+            1 ~ "white",
+            2 ~ "black", 
+            3 ~ "asian", 
+            4 ~ "puerto rican", 
+            8 ~ "other"),
+    frace = fct_infreq(frace),
+    mrace = 
+        case_match(mrace,
+            1 ~ "white",
+            2 ~ "black", 
+            3 ~ "asian", 
+            4 ~ "puerto rican",
+            8 ~ "other"),
+    mrace = fct_infreq(mrace),
+    malform = as.logical(malform)) |> 
+  sample_n(100)
 ```
 
+```{r}
+x = model.matrix(bwt ~ ., bwt_df) [, -1]
+y = bwt_df |> pull(bwt)
 
+lambda = 10^(seq(-2, 2.75, 0.1))
+
+lasso_cv =
+  cv.glmnet(x = x, y = y, lambda = lambda)
+
+lambda_opt = lasso_cv[["lambda.min"]]
+```
+
+```{r}
+lasso_fit =
+  glmnet(x = x, y = y, lambda = lambda_opt)
+
+lasso_fit |> 
+  broom::tidy()
+```
+
+LASSO was used to build a regression model for birth weight as it performs variable selection and coefficient shrinkage. The data was first converted into numerical format with x as the predictors and y as the outcome. A grid of lambda values along with cross validation was then used to determine the optimal lambda which determines the amount of shrinkage applied to each coefficient. This is the lambda that was then used to fit the proposed regression model.
+
+```{r}
+lasso_model = lm(bwt ~ bhead + blength + fincome + frace + mrace, data = bwt_df)
+
+bwt_df |> 
+  add_predictions(lasso_model) |> 
+  add_residuals(lasso_model) |> 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(color = "purple") +
+  labs(
+    x = "Fitted Values",
+    y = "Residuals",
+    title = "Residuals vs Fitted Values"
+  )
+```
+
+```{r}
+main_effects_model = lm(bwt ~ blength + gaweeks, data = bwt_df)
+main_effects_model
+
+interactions_model = lm(bwt ~ bhead * blength * babysex, data = bwt_df)
+interactions_model
+```
+
+Cross validation.
+```{r}
+bwt_df_cv =
+  bwt_df |> 
+  mutate(id = row_number())
+
+train_df = sample_frac(bwt_df_cv, size = .8)
+
+test_df = anti_join(bwt_df_cv, train_df, by = "id")
+```
+
+```{r}
+cv_df =
+  crossv_mc(bwt_df_cv, n = 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+```{r, error = TRUE}
+cv_df |> 
+  mutate(
+    lasso_fit = map(train, \(df) lm(bwt ~ bhead + blength + fincome + frace + mrace, data = df)),
+    main_effects_fit = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
+    interactions_fit = map(train, \(df) lm(bwt ~ bhead * blength * babysex, data = df))
+  )  |> 
+  mutate(
+    pe_lasso = map2_dbl(lasso_fit, test, rmse),
+    pe_main_effects = map2_dbl(main_effects_fit, test, rmse),
+    pe_interactions = map2_dbl(interactions_fit, test, rmse)
+    )
+```  
+  
 
 
