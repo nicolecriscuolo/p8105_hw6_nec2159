@@ -4,7 +4,7 @@ author: "Nicole Criscuolo"
 date: "2025-11-18"
 output: github_document
 ---
-## CHANGE # BOOTSTRAPS PROBLEM 2
+## CHANGE # BOOTSTRAPS PROBLEM 2 AND ADD MRACE FOR PROBLEM 3
 
 ```{r setup, include=FALSE}
 library(p8105.datasets)
@@ -238,19 +238,25 @@ cv_df =
   )
 ```
 
-```{r, error = TRUE}
+```{r}
 cv_df |> 
   mutate(
-    lasso_fit = map(train, \(df) lm(bwt ~ bhead + blength + fincome + frace + mrace, data = df)),
+    lasso_fit = map(train, \(df) lm(bwt ~ bhead + blength + fincome + mrace, data = df)),
     main_effects_fit = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
     interactions_fit = map(train, \(df) lm(bwt ~ bhead * blength * babysex, data = df))
-  )  |> 
+  ) |> 
   mutate(
-    pe_lasso = map2_dbl(lasso_fit, test, rmse),
-    pe_main_effects = map2_dbl(main_effects_fit, test, rmse),
-    pe_interactions = map2_dbl(interactions_fit, test, rmse)
-    )
-```  
+    rmse_lasso = map2_dbl(lasso_fit, test, rmse),
+    rmse_main_effects = map2_dbl(main_effects_fit, test, rmse),
+    rmse_interactions = map2_dbl(interactions_fit, test, rmse)
+    ) |> 
+    summarize(
+    pe_lasso = mean(rmse_lasso),
+    pe_main_effects = mean(rmse_main_effects),
+    pe_interactions = mean(rmse_interactions)
+  ) |> 
+  knitr::kable()
   
+```
 
 
