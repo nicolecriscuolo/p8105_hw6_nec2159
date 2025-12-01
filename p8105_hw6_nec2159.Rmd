@@ -4,7 +4,6 @@ author: "Nicole Criscuolo"
 date: "2025-11-18"
 output: github_document
 ---
-## CHANGE # BOOTSTRAPS PROBLEM 2 AND ADD MRACE FOR PROBLEM 3
 
 ```{r setup, include=FALSE}
 library(p8105.datasets)
@@ -27,7 +26,7 @@ options(
 scale_colour_discrete = scale_colour_viridis_d
 scale_fill_discrete = scale_fill_viridis_d
 
-set.seed(1)
+set.seed(2)
 ```
 
 ## Problem 1
@@ -52,13 +51,13 @@ baltimore_df =
 baltimore_model =
   glm(solved ~ victim_age + victim_sex + victim_race, data = baltimore_df, family = binomial)
 
+baltimore_results =
 baltimore_model |> 
   broom::tidy(conf.int = TRUE, exponentiate = TRUE) |> 
-  filter(term == "victim_sexMale") |> 
-  select(estimate, conf.low, conf.high)
+  filter(term == "victim_sexMale")
 ```
 
-In homicide cases in Baltimore, MD, male victims had 0.4255117 times the odds of having their cases solved compared to female victims after adjusting for age and race. We are 95% confident that the true odds ratio for male versus female victims is between 0.3241908 and 0.5575508.
+In homicide cases in Baltimore, MD, male victims had `r baltimore_results |> pull(estimate)` times the odds of having their cases solved compared to female victims after adjusting for age and race. We are 95% confident that the true odds ratio for male versus female victims is between `r baltimore_results |> pull(conf.low)` and `r baltimore_results |> pull(conf.high)`.
 
 ```{r}
 all_city_results =
@@ -96,12 +95,15 @@ data("weather_df")
 
 estimates =
 weather_df |> 
-  modelr::bootstrap(n = 500) |> 
+  modelr::bootstrap(n = 5000) |> 
   mutate(
     models = map(strap, \(df) lm(tmax ~ tmin + prcp, data = df)),
     tidy_results = map(models, broom::tidy),
     glance_results = map(models, broom::glance),
-    beta_ratio = map_dbl(tidy_results, \(x) x[["estimate"]][2] / x[["estimate"]][3]),
+    beta_ratio = map_dbl(tidy_results, \(tidy_df) {
+    (tidy_df |> filter(term == "tmin") |> pull(estimate)) / 
+        (tidy_df |> filter(term == "prcp") |> pull(estimate))
+    }),
     r_squared = map_dbl(glance_results, "r.squared")
     ) |> 
   select(.id, beta_ratio, r_squared)
@@ -129,18 +131,7 @@ estimates |>
 
 The distribution of $R^2$ appears to be normally distributed and centered around 0.941. Most estimates are very close to this value, indicating the proportion of variance explained by the model is high across bootstrap samples.
 
-```{r}
-beta_ratio_CI =
-estimates |> 
-  pull(beta_ratio) |> 
-  quantile(c(.025, .975))
-```
-
-```{r}
-estimates |> 
-  pull(r_squared) |> 
-  quantile(c(.025, .975))
-```
+In the 5000 bootstrap samples, $\frac{\hat{\beta}_1}{\hat{\beta}_2}$ appears within (`r estimates |> pull(beta_ratio) |> quantile(c(.025, .975))`) 95% of the time, and $R^2$ appears within (`r estimates |> pull(r_squared) |> quantile(c(.025, .975))`) 95% of the time.
 
 ## Problem 3
 
@@ -193,10 +184,14 @@ lasso_fit |>
   broom::tidy()
 ```
 
-LASSO was used to build a regression model for birth weight as it performs variable selection and coefficient shrinkage. The data was first converted into numerical format with x as the predictors and y as the outcome. A grid of lambda values along with cross validation was then used to determine the optimal lambda which determines the amount of shrinkage applied to each coefficient. This is the lambda that was then used to fit the proposed regression model.
+LASSO was used to build a regression model for birth weight as it performs variable selection and coefficient shrinkage. The data was first converted into numerical format with x as the predictors and y as the outcome. A number of lambda values along with cross validation was then used to determine the optimal lambda which determines the amount of shrinkage applied to each coefficient. This is the lambda that was then used to fit the proposed regression model. Predictors include `bhead`, `blength`, `delwt`, and `mraceblack`.
 
 ```{r}
-lasso_model = lm(bwt ~ bhead + blength + fincome + frace + mrace, data = bwt_df)
+bwt_df =
+  bwt_df |> 
+  mutate(mraceblack = ifelse(mrace == "black", 1, 0))
+
+lasso_model = lm(bwt ~ bhead + blength + delwt + mraceblack, data = bwt_df)
 
 bwt_df |> 
   add_predictions(lasso_model) |> 
@@ -210,28 +205,16 @@ bwt_df |>
   )
 ```
 
+The residuals versus fitted values plot shows the model is appropriate because the residuals do not exhibit any pattern and are randomly scattered around 0. 
+
 ```{r}
 main_effects_model = lm(bwt ~ blength + gaweeks, data = bwt_df)
-main_effects_model
-
 interactions_model = lm(bwt ~ bhead * blength * babysex, data = bwt_df)
-interactions_model
-```
-
-Cross validation.
-```{r}
-bwt_df_cv =
-  bwt_df |> 
-  mutate(id = row_number())
-
-train_df = sample_frac(bwt_df_cv, size = .8)
-
-test_df = anti_join(bwt_df_cv, train_df, by = "id")
 ```
 
 ```{r}
 cv_df =
-  crossv_mc(bwt_df_cv, n = 100) |> 
+  crossv_mc(bwt_df, n = 100) |> 
   mutate(
     train = map(train, as_tibble),
     test = map(test, as_tibble)
@@ -241,22 +224,22 @@ cv_df =
 ```{r}
 cv_df |> 
   mutate(
-    lasso_fit = map(train, \(df) lm(bwt ~ bhead + blength + fincome + mrace, data = df)),
-    main_effects_fit = map(train, \(df) lm(bwt ~ blength + gaweeks, data = df)),
-    interactions_fit = map(train, \(df) lm(bwt ~ bhead * blength * babysex, data = df))
-  ) |> 
+    lasso_fit = map(train, \(df) lasso_model),
+    main_effects_fit = map(train, \(df) main_effects_model),
+    interactions_fit = map(train, \(df) interactions_model)
+    ) |> 
   mutate(
     rmse_lasso = map2_dbl(lasso_fit, test, rmse),
     rmse_main_effects = map2_dbl(main_effects_fit, test, rmse),
     rmse_interactions = map2_dbl(interactions_fit, test, rmse)
     ) |> 
-    summarize(
+  summarize(
     pe_lasso = mean(rmse_lasso),
     pe_main_effects = mean(rmse_main_effects),
     pe_interactions = mean(rmse_interactions)
-  ) |> 
+    ) |> 
   knitr::kable()
-  
 ```
 
+The interactions model has the lowest prediction error, indicating `bhead * blength * babysex` predicts birth weight the most accurately compared to the LASSO model and main effects model.
 
