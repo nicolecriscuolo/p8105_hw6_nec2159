@@ -150,7 +150,8 @@ bwt_df =
             2 ~ "black", 
             3 ~ "asian", 
             4 ~ "puerto rican", 
-            8 ~ "other"),
+            8 ~ "other",
+            9 ~ "unknown"),
     frace = fct_infreq(frace),
     mrace = 
         case_match(mrace,
@@ -184,14 +185,10 @@ lasso_fit |>
   broom::tidy()
 ```
 
-LASSO was used to build a regression model for birth weight as it performs variable selection and coefficient shrinkage. The data was first converted into numerical format with x as the predictors and y as the outcome. A number of lambda values along with cross validation was then used to determine the optimal lambda which determines the amount of shrinkage applied to each coefficient. This is the lambda that was then used to fit the proposed regression model. Predictors include `bhead`, `blength`, `delwt`, and `mraceblack`.
+LASSO was used to build a regression model for birth weight as it performs variable selection and coefficient shrinkage. The data was first converted into numerical format with x as the predictors and y as the outcome. A number of lambda values along with cross validation was then used to determine the optimal lambda which determines the amount of shrinkage applied to each coefficient. This is the lambda that was then used to fit the proposed regression model. Predictors include `bhead`, `blength`, `delwt`, and `mrace`.
 
 ```{r}
-bwt_df =
-  bwt_df |> 
-  mutate(mraceblack = ifelse(mrace == "black", 1, 0))
-
-lasso_model = lm(bwt ~ bhead + blength + delwt + mraceblack, data = bwt_df)
+lasso_model = lm(bwt ~ bhead + blength + delwt + mrace, data = bwt_df)
 
 bwt_df |> 
   add_predictions(lasso_model) |> 
